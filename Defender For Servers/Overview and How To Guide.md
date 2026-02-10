@@ -153,6 +153,7 @@ let EligibleTables = dynamic([
     "MDCFileIntegrityMonitoringEvents",
     "LinuxAuditLog"
 ]);
+// -- Part A-1: Per-table daily ingestion in GB ---------------------------
 let PerTableDaily =
     Usage
     | where TimeGenerated >= ago(1d * LookbackDays)
@@ -160,12 +161,14 @@ let PerTableDaily =
     | where DataType in (EligibleTables)
     | summarize DailyMB = sum(Quantity) by Day = startofday(TimeGenerated), DataType
     | extend DailyGB = round(DailyMB / 1000.0, 3);
+// -- Part A-2: Roll up to one row per Day --------------------------------
 let DailyEligibleIngestion =
     PerTableDaily
     | summarize
         EligibleIngestionGB = round(sum(DailyGB), 3),
         TableBreakdown      = make_bag(bag_pack(tostring(DataType), DailyGB))
         by Day;
+// -- Part B: Daily benefit from the Operation table ----------------------
 let DailyBenefitUsed =
     Operation
     | where TimeGenerated >= ago(1d * LookbackDays)
@@ -175,9 +178,11 @@ let DailyBenefitUsed =
     | parse OperationKey with "Benefit type used: " BenefitType
     | where BenefitType has "Node" or BenefitType has "Defender" or BenefitType has "Standard"
     | summarize BenefitUsedGB = round(sum(BenefitUsedGB), 3) by Day = startofday(TimeGenerated);
+// -- Part C: Join, calculate cost + savings ------------------------------
 DailyEligibleIngestion
 | join kind=leftouter DailyBenefitUsed on Day
 | extend
+    BenefitActive        = iff(coalesce(BenefitUsedGB, 0.0) > 0, "✅ Yes", "❌ No"),
     BenefitAppliedGB     = coalesce(BenefitUsedGB, 0.0),
     DailySavingsGB       = coalesce(BenefitUsedGB, 0.0),
     DailySavingsAmount   = round(coalesce(BenefitUsedGB, 0.0) * PricePerGB, 2),
@@ -187,6 +192,7 @@ DailyEligibleIngestion
 | project
     Day,
     EligibleIngestionGB,
+    BenefitActive,
     BenefitAppliedGB,
     DailySavingsAmount,
     BillableGB,
