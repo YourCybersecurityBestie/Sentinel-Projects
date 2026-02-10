@@ -135,7 +135,7 @@ Performs a `leftouter` join between the daily ingestion and daily benefit on the
 
 ### Daily Cost & Savings Query
 
-> **File:** [Defender_p2_daily_with_savings.kql](Defender%20For%20Servers/defender_p2_daily_with_savings.kql)
+> **File:** [defender_p2_daily_with_savings.kql](defender_p2_daily_with_savings.kql)
 
 ```kql
 let LookbackDays = 30;
@@ -198,7 +198,7 @@ DailyEligibleIngestion
 
 ### Period Summary Query
 
-> **File:** [`queries/defender_p2_period_summary.kql`](queries/defender_p2_period_summary.kql)
+>  **File:** [defender_p2_period_summary.kql](defender_p2_period_summary.kql)
 
 ```kql
 let LookbackDays = 30;
