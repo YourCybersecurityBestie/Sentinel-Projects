@@ -18,7 +18,7 @@ Everything here is designed to be **copied straight into the Log Analytics query
 
 | Project | Description |
 |---------|-------------|
-| [Defender for Servers P2 — Cost & Savings Analysis](Defender For Servers/) | Compound KQL queries that calculate daily billable ingestion after the Defender for Servers P2 benefit, track actual savings, and surface per-table breakdowns for FinOps reporting. |
+| [Defender for Servers P2 — Cost & Savings Analysis](Defender%20For%20Servers/) | Compound KQL queries that calculate daily billable ingestion after the Defender for Servers P2 benefit, track actual savings, and surface per-table breakdowns for FinOps reporting. |
 
 *More projects coming soon.*
 
