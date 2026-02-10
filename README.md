@@ -2,6 +2,8 @@
 
 A collection of KQL queries, workbooks, and operational tools for **Microsoft Sentinel** and **Log Analytics** — built by a practitioner, for practitioners.
 
+**Author: Venicia Solomons, Solution Engineer - Cloud and AI Security, Microsoft**
+
 ---
 
 ## What This Repo Is About
