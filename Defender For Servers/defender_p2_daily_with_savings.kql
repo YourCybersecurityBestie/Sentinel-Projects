@@ -1,6 +1,6 @@
-// ============================================================================
-// Defender for Servers P2 — Daily Cost & Savings Report
-// ============================================================================
+// ==================================================================================
+// Defender for Servers P2 — Daily Cost & Savings Report (Author: Venicia Solomons)
+// ==================================================================================
 // Shows daily eligible ingestion, benefit applied, actual savings,
 // billable remainder, and estimated cost.
 //
@@ -49,6 +49,7 @@ let DailyBenefitUsed =
 DailyEligibleIngestion
 | join kind=leftouter DailyBenefitUsed on Day
 | extend
+    BenefitActive        = iff(coalesce(BenefitUsedGB, 0.0) > 0, "✅ Yes", "❌ No"),
     BenefitAppliedGB     = coalesce(BenefitUsedGB, 0.0),
     DailySavingsGB       = coalesce(BenefitUsedGB, 0.0),
     DailySavingsAmount   = round(coalesce(BenefitUsedGB, 0.0) * PricePerGB, 2),
@@ -58,6 +59,7 @@ DailyEligibleIngestion
 | project
     Day,
     EligibleIngestionGB,
+    BenefitActive,
     BenefitAppliedGB,
     DailySavingsAmount,
     BillableGB,
