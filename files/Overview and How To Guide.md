@@ -383,7 +383,3 @@ If `BenefitAppliedGB` is consistently zero, the benefit is not being applied. Co
 - [Azure Monitor Logs cost calculations and options](https://learn.microsoft.com/azure/azure-monitor/logs/cost-logs)
 
 ---
-
-## License
-
-This project is provided under the [MIT License](LICENSE).
