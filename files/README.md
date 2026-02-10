@@ -1,6 +1,5 @@
 # Defender for Servers Plan 2 — Daily Billable Ingestion & Cost Savings Analysis
-**Author: Venicia Solomons, Solution Engineer - Cloud and AI Security, Microsoft
-**
+Author: Venicia Solomons, Solution Engineer - Cloud and AI Security, Microsoft
 KQL queries for Microsoft Sentinel / Log Analytics that calculate daily billable ingestion, actual savings, and cost after the **Microsoft Defender for Servers Plan 2** benefit (500 MB/server/day).
 
 ---
