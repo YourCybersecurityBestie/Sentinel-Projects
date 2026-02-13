@@ -1,5 +1,6 @@
 // ============================================================================
 // Defender for Servers P2 — Daily Cost & Savings (Classic Pricing Edition)
+// (Author: Venicia Solomons)
 // ============================================================================
 // For environments on CLASSIC pricing (separate LA + Sentinel tiers).
 // Uses separate rate variables because each benefit offsets a different meter.
