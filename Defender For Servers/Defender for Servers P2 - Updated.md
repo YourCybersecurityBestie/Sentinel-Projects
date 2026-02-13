@@ -108,7 +108,7 @@ Set these at the top of each query before running:
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `LookbackDays` | `30` | Number of days of history to analyse. Do not exceed the retention period of the `Usage` or `Operation` tables. |
-| `PricePerGB` | `2.76` | Your effective cost per GB. For Sentinel simplified pricing, this is a single combined rate. For classic pricing, sum the LA ingestion rate + Sentinel analysis rate. Adjust for commitment tier / EA discounts. |
+| `PricePerGB` | `2.00` | Your effective cost per GB. For Sentinel simplified pricing, this is a single combined rate. For classic pricing, sum the LA ingestion rate + Sentinel analysis rate. Adjust for commitment tier / EA discounts. |
 
 ### Part A-1: Per-Table Daily Ingestion
 
@@ -134,11 +134,31 @@ Performs a `leftouter` join between the daily ingestion and daily benefit on the
 
 ### Daily Cost & Savings Query
 
-> **File:** [`queries/defender_p2_daily_with_savings.kql`](queries/defender_p2_daily_with_savings.kql)
+> 
 
 ```kql
+// ============================================================================
+// Defender for Servers P2 — Daily Cost & Savings (Classic Pricing Edition)
+// ============================================================================
+// For environments on CLASSIC pricing (separate LA + Sentinel tiers).
+// Uses separate rate variables because each benefit offsets a different meter.
+//
+// CHANGE LOG:
+//   - BenefitType filter: "contains" instead of "has" (fixes MicrosoftDefender match)
+//   - Two rate variables: one for LA (Defender benefit), one for Sentinel (M365 benefit)
+//   - Both benefits shown in separate columns
+//   - BenefitActive column shows ✅/❌ for quick visual check
+//
+// HOW TO FIND YOUR RATES:
+//   Go to Sentinel > Settings > Pricing tab.
+//   LA rate  = LA tier daily cost ÷ tier GB  (e.g. $799.18 ÷ 400 = $2.00)
+//   Sentinel rate = Sentinel tier daily cost ÷ tier GB (e.g. $892.32 ÷ 1000 = $0.89)
+//
+// CONFIGURATION:
 let LookbackDays = 30;
-let PricePerGB = 2.76;
+let LAEffectiveRate = 2.00;       // Log Analytics effective $/GB from your commitment tier
+let SentinelEffectiveRate = 0.89; // Sentinel effective $/GB from your commitment tier
+let CombinedRate = 2.89;          // LA + Sentinel combined (for CostWithoutBenefit column)
 let EligibleTables = dynamic([
     "SecurityEvent",
     "WindowsFirewall",
@@ -152,6 +172,7 @@ let EligibleTables = dynamic([
     "MDCFileIntegrityMonitoringEvents",
     "LinuxAuditLog"
 ]);
+// -- Part A-1: Per-table daily ingestion in GB ---------------------------
 let PerTableDaily =
     Usage
     | where TimeGenerated >= ago(1d * LookbackDays)
@@ -159,38 +180,65 @@ let PerTableDaily =
     | where DataType in (EligibleTables)
     | summarize DailyMB = sum(Quantity) by Day = startofday(TimeGenerated), DataType
     | extend DailyGB = round(DailyMB / 1000.0, 3);
+// -- Part A-2: Roll up to one row per Day --------------------------------
 let DailyEligibleIngestion =
     PerTableDaily
     | summarize
         EligibleIngestionGB = round(sum(DailyGB), 3),
         TableBreakdown      = make_bag(bag_pack(tostring(DataType), DailyGB))
         by Day;
-let DailyBenefitUsed =
+// -- Part B-1: Defender for Servers P2 benefit ---------------------------
+// Offsets the LA ingestion charge under classic pricing
+let DailyDefenderBenefit =
     Operation
     | where TimeGenerated >= ago(1d * LookbackDays)
     | where Detail startswith "Benefit amount used"
-    | parse Detail with "Benefit amount used: " BenefitUsedGB_str " GB"
-    | extend BenefitUsedGB = toreal(BenefitUsedGB_str)
+    | parse Detail with "Benefit amount used: " BenefitGB_str " GB"
+    | extend BenefitGB = toreal(BenefitGB_str)
     | parse OperationKey with "Benefit type used: " BenefitType
-    | where BenefitType has "Node" or BenefitType has "Defender" or BenefitType has "Standard"
-    | summarize BenefitUsedGB = round(sum(BenefitUsedGB), 3) by Day = startofday(TimeGenerated);
+    | where BenefitType contains "MicrosoftDefender" or BenefitType contains "Node" or BenefitType contains "Standard" or BenefitType contains "Defender"
+    | summarize DefenderBenefitGB = round(sum(BenefitGB), 3) by Day = startofday(TimeGenerated);
+// -- Part B-2: Microsoft 365 E5 Sentinel benefit ------------------------
+// Offsets the Sentinel analysis charge under classic pricing
+let DailySentinelBenefit =
+    Operation
+    | where TimeGenerated >= ago(1d * LookbackDays)
+    | where Detail startswith "Benefit amount used"
+    | parse Detail with "Benefit amount used: " BenefitGB_str " GB"
+    | extend BenefitGB = toreal(BenefitGB_str)
+    | parse OperationKey with "Benefit type used: " BenefitType
+    | where BenefitType contains "Sentinel" or BenefitType contains "M365"
+    | summarize SentinelM365BenefitGB = round(sum(BenefitGB), 3) by Day = startofday(TimeGenerated);
+// -- Part C: Join and calculate ------------------------------------------
 DailyEligibleIngestion
-| join kind=leftouter DailyBenefitUsed on Day
+| join kind=leftouter DailyDefenderBenefit on Day
+| join kind=leftouter DailySentinelBenefit on Day
 | extend
-    BenefitAppliedGB     = coalesce(BenefitUsedGB, 0.0),
-    DailySavingsGB       = coalesce(BenefitUsedGB, 0.0),
-    DailySavingsAmount   = round(coalesce(BenefitUsedGB, 0.0) * PricePerGB, 2),
-    BillableGB           = round(max_of(0.0, EligibleIngestionGB - coalesce(BenefitUsedGB, 0.0)), 3),
-    BillableCost         = round(max_of(0.0, EligibleIngestionGB - coalesce(BenefitUsedGB, 0.0)) * PricePerGB, 2),
-    CostWithoutBenefit   = round(EligibleIngestionGB * PricePerGB, 2)
+    DefenderBenefitGB       = coalesce(DefenderBenefitGB, 0.0),
+    SentinelM365BenefitGB   = coalesce(SentinelM365BenefitGB, 0.0)
+| extend
+    // Quick visual check: is the Defender benefit active?
+    BenefitActive           = iff(DefenderBenefitGB > 0, "✅ Yes", "❌ No"),
+    // Savings: each benefit uses its own rate under classic pricing
+    DefenderSavings         = round(DefenderBenefitGB * LAEffectiveRate, 2),
+    SentinelM365Savings     = round(SentinelM365BenefitGB * SentinelEffectiveRate, 2),
+    TotalDailySavings       = round((DefenderBenefitGB * LAEffectiveRate) + (SentinelM365BenefitGB * SentinelEffectiveRate), 2),
+    // Billable: eligible ingestion minus the Defender benefit (LA portion only)
+    // Note: The M365 Sentinel benefit applies to ALL data, not just eligible tables,
+    // so it is shown as a saving but not subtracted from eligible ingestion here.
+    BillableGB              = round(max_of(0.0, EligibleIngestionGB - DefenderBenefitGB), 3),
+    BillableLACost          = round(max_of(0.0, EligibleIngestionGB - DefenderBenefitGB) * LAEffectiveRate, 2),
+    CostWithoutAnyBenefit   = round(EligibleIngestionGB * CombinedRate, 2)
 | project
     Day,
     EligibleIngestionGB,
-    BenefitAppliedGB,
-    DailySavingsAmount,
+    BenefitActive,
+    DefenderBenefitGB,
+    DefenderSavings,
+    TotalDailySavings,
     BillableGB,
-    BillableCost,
-    CostWithoutBenefit,
+    BillableLACost,
+    CostWithoutAnyBenefit,
     TableBreakdown
 | sort by Day desc
 ```
@@ -430,4 +478,4 @@ If `BenefitAppliedGB` is consistently zero, the benefit is not being applied. Co
 
 ## License
 
-This project is provided under the [MIT License](LICENSE).
+This project is provided under development and not an official Microsoft created project with no affilication to official Microsoft created resources and documentation. 
