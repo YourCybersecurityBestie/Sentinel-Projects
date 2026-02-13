@@ -78,6 +78,8 @@ DailyEligibleIngestion
     DefenderBenefitGB       = coalesce(DefenderBenefitGB, 0.0),
     SentinelM365BenefitGB   = coalesce(SentinelM365BenefitGB, 0.0)
 | extend
+// Quick visual check: is the Defender benefit active?
+    BenefitActive           = iff(DefenderBenefitGB > 0, "✅ Yes", "❌ No"),
     // Savings: each benefit uses its own rate under classic pricing
     DefenderSavings         = round(DefenderBenefitGB * LAEffectiveRate, 2),
     SentinelM365Savings     = round(SentinelM365BenefitGB * SentinelEffectiveRate, 2),
@@ -91,6 +93,7 @@ DailyEligibleIngestion
 | project
     Day,
     EligibleIngestionGB,
+    BenefitActive,
     DefenderBenefitGB,
     DefenderSavings,
     SentinelM365BenefitGB,
