@@ -1,0 +1,41 @@
+// Run in Azure Resource Graph Explorer
+securityresources
+| where type == "microsoft.security/pricings"
+| where name == "VirtualMachines"
+| extend PricingTier = tostring(properties.pricingTier),
+         SubPlan = tostring(properties.subPlan)
+| extend DefenderPlan = case(
+    PricingTier == "Free", "No Coverage",
+    SubPlan == "P1", "Plan 1",
+    SubPlan == "P2", "Plan 2",
+    PricingTier == "Standard", "Standard (Plan 2)",
+    "Unknown"
+    )
+| project subscriptionId, DefenderPlan
+| join kind=leftouter (
+    resources
+    | where type in ("microsoft.compute/virtualmachines", "microsoft.hybridcompute/machines")
+    | extend ServerType = case(
+        type == "microsoft.compute/virtualmachines", "Azure VM",
+        type == "microsoft.hybridcompute/machines", "Arc Server",
+        "Other"
+    )
+    | summarize
+        AzureVMs = countif(ServerType == "Azure VM"),
+        ArcServers = countif(ServerType == "Arc Server"),
+        TotalServers = count()
+        by subscriptionId
+) on subscriptionId
+| join kind=leftouter (
+    resourcecontainers
+    | where type == "microsoft.resources/subscriptions"
+    | project subscriptionId, SubscriptionName = name
+) on subscriptionId
+| project
+    SubscriptionName,
+    subscriptionId,
+    DefenderPlan,
+    AzureVMs = coalesce(AzureVMs, 0),
+    ArcServers = coalesce(ArcServers, 0),
+    TotalServers = coalesce(TotalServers, 0)
+| order by DefenderPlan asc, TotalServers desc
