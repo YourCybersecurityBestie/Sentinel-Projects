@@ -1,0 +1,441 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Defender for Servers P2 \u2014 Benefit & Cost Analysis\n\nThis workbook provides visibility into your **Defender for Servers Plan 2** data ingestion benefit, cost savings, and server coverage across your tenant.\n\n> **Note:** This workbook uses **classic pricing** rate variables. Adjust the `LAEffectiveRate`, `SentinelEffectiveRate`, and `CombinedRate` parameters below to match your actual commitment tier rates. To find your rates, go to **Sentinel \u2192 Settings \u2192 Pricing** and divide the tier daily cost by the tier GB."
+      },
+      "name": "title"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "a1b2c3d4-0001-0001-0001-000000000001",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            },
+            "value": {
+              "durationMs": 2592000000
+            },
+            "label": "Time Range"
+          },
+          {
+            "id": "a1b2c3d4-0001-0001-0001-000000000002",
+            "version": "KqlParameterItem/1.0",
+            "name": "LAEffectiveRate",
+            "type": 1,
+            "value": "2.00",
+            "label": "LA Effective Rate ($/GB)"
+          },
+          {
+            "id": "a1b2c3d4-0001-0001-0001-000000000003",
+            "version": "KqlParameterItem/1.0",
+            "name": "SentinelEffectiveRate",
+            "type": 1,
+            "value": "0.89",
+            "label": "Sentinel Effective Rate ($/GB)"
+          },
+          {
+            "id": "a1b2c3d4-0001-0001-0001-000000000004",
+            "version": "KqlParameterItem/1.0",
+            "name": "CombinedRate",
+            "type": 1,
+            "value": "2.89",
+            "label": "Combined Rate ($/GB)"
+          }
+        ],
+        "style": "pills"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## \ud83d\udcca Defender for Servers Coverage\n\nServer counts by Defender plan across all subscriptions in the tenant. This section uses Azure Resource Graph \u2014 no workspace dependency."
+      },
+      "name": "coverage-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "securityresources\n| where type == \"microsoft.security/pricings\"\n| where name == \"VirtualMachines\"\n| extend PricingTier = tostring(properties.pricingTier),\n         SubPlan = tostring(properties.subPlan)\n| extend DefenderPlan = case(\n    PricingTier == \"Free\", \"No Coverage\",\n    SubPlan == \"P1\", \"Plan 1\",\n    SubPlan == \"P2\", \"Plan 2\",\n    PricingTier == \"Standard\", \"Standard (Plan 2)\",\n    \"Unknown\"\n    )\n| project subscriptionId, DefenderPlan\n| join kind=leftouter (\n    resources\n    | where type in (\"microsoft.compute/virtualmachines\", \"microsoft.hybridcompute/machines\")\n    | summarize ServerCount = count() by subscriptionId\n) on subscriptionId\n| extend ServerCount = coalesce(ServerCount, 0)\n| summarize\n    TotalServers = sum(ServerCount),\n    Subscriptions = count()\n    by DefenderPlan",
+        "size": 3,
+        "title": "Server Coverage Summary by Plan",
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources",
+        "crossComponentResources": [
+          "value::all"
+        ],
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "DefenderPlan",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "TotalServers",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 0,
+              "options": {
+                "style": "decimal",
+                "maximumFractionDigits": 0
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Subscriptions",
+            "formatter": 1,
+            "formatOptions": {
+              "compositeBarSettings": {}
+            }
+          },
+          "showBorder": true
+        },
+        "headingLevel": 5
+      },
+      "name": "coverage-tiles"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "securityresources\n| where type == \"microsoft.security/pricings\"\n| where name == \"VirtualMachines\"\n| extend PricingTier = tostring(properties.pricingTier),\n         SubPlan = tostring(properties.subPlan)\n| extend DefenderPlan = case(\n    PricingTier == \"Free\", \"No Coverage\",\n    SubPlan == \"P1\", \"Plan 1\",\n    SubPlan == \"P2\", \"Plan 2\",\n    PricingTier == \"Standard\", \"Standard (Plan 2)\",\n    \"Unknown\"\n    )\n| project subscriptionId, DefenderPlan\n| join kind=leftouter (\n    resources\n    | where type in (\"microsoft.compute/virtualmachines\", \"microsoft.hybridcompute/machines\")\n    | extend ServerType = case(\n        type == \"microsoft.compute/virtualmachines\", \"Azure VM\",\n        type == \"microsoft.hybridcompute/machines\", \"Arc Server\",\n        \"Other\"\n    )\n    | summarize\n        AzureVMs = countif(ServerType == \"Azure VM\"),\n        ArcServers = countif(ServerType == \"Arc Server\"),\n        TotalServers = count()\n        by subscriptionId\n) on subscriptionId\n| join kind=leftouter (\n    resourcecontainers\n    | where type == \"microsoft.resources/subscriptions\"\n    | project subscriptionId, SubscriptionName = name\n) on subscriptionId\n| project\n    SubscriptionName = coalesce(SubscriptionName, subscriptionId),\n    DefenderPlan,\n    AzureVMs = coalesce(AzureVMs, 0),\n    ArcServers = coalesce(ArcServers, 0),\n    TotalServers = coalesce(TotalServers, 0)\n| order by DefenderPlan asc, TotalServers desc",
+        "size": 1,
+        "title": "Per-Subscription Breakdown",
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources",
+        "crossComponentResources": [
+          "value::all"
+        ],
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "DefenderPlan",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Plan 2",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Plan 1",
+                    "representation": "2",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Standard (Plan 2)",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "No Coverage",
+                    "representation": "critical",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "representation": "unknown",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            },
+            {
+              "columnMatch": "TotalServers",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            }
+          ]
+        }
+      },
+      "name": "coverage-table"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## \ud83d\udcc8 Period Summary\n\nAggregate totals for the selected time range showing total ingestion, benefit applied, savings, and billable cost."
+      },
+      "name": "summary-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let LARate = todouble('{LAEffectiveRate}');\nlet SentinelRate = todouble('{SentinelEffectiveRate}');\nlet Combined = todouble('{CombinedRate}');\nlet EligibleTables = dynamic([\"SecurityEvent\",\"WindowsFirewall\",\"SecurityAlert\",\"SecurityBaseline\",\"SecurityBaselineSummary\",\"SecurityDetection\",\"ProtectionStatus\",\"Update\",\"UpdateSummary\",\"MDCFileIntegrityMonitoringEvents\",\"LinuxAuditLog\"]);\nlet PerTableDaily = Usage\n| where TimeGenerated {TimeRange}\n| where IsBillable == true\n| where DataType in (EligibleTables)\n| summarize DailyMB = sum(Quantity) by Day = startofday(TimeGenerated), DataType\n| extend DailyGB = round(DailyMB / 1000.0, 3);\nlet DailyEligible = PerTableDaily | summarize EligibleGB = round(sum(DailyGB), 3) by Day;\nlet DefBenefit = Operation\n| where TimeGenerated {TimeRange}\n| where Detail startswith \"Benefit amount used\"\n| parse Detail with \"Benefit amount used: \" val \" GB\"\n| extend BenefitGB = toreal(val)\n| parse OperationKey with \"Benefit type used: \" BType\n| where BType contains \"MicrosoftDefender\" or BType contains \"Node\" or BType contains \"Standard\" or BType contains \"Defender\"\n| summarize DefGB = round(sum(BenefitGB), 3) by Day = startofday(TimeGenerated);\nlet SenBenefit = Operation\n| where TimeGenerated {TimeRange}\n| where Detail startswith \"Benefit amount used\"\n| parse Detail with \"Benefit amount used: \" val \" GB\"\n| extend BenefitGB = toreal(val)\n| parse OperationKey with \"Benefit type used: \" BType\n| where BType contains \"Sentinel\" or BType contains \"M365\"\n| summarize SenGB = round(sum(BenefitGB), 3) by Day = startofday(TimeGenerated);\nDailyEligible\n| join kind=leftouter DefBenefit on Day\n| join kind=leftouter SenBenefit on Day\n| extend DefGB = coalesce(DefGB, 0.0), SenGB = coalesce(SenGB, 0.0)\n| extend BillableGB = max_of(0.0, EligibleGB - DefGB)\n| summarize\n    PeriodDays = dcount(Day),\n    TotalEligibleGB = round(sum(EligibleGB), 2),\n    TotalDefenderBenefitGB = round(sum(DefGB), 2),\n    TotalDefenderSavings = round(sum(DefGB) * LARate, 2),\n    TotalSentinelM365BenefitGB = round(sum(SenGB), 2),\n    TotalSentinelM365Savings = round(sum(SenGB) * SentinelRate, 2),\n    TotalCombinedSavings = round((sum(DefGB) * LARate) + (sum(SenGB) * SentinelRate), 2),\n    TotalBillableGB = round(sum(BillableGB), 2),\n    TotalBillableLACost = round(sum(BillableGB) * LARate, 2),\n    CostWithoutAnyBenefit = round(sum(EligibleGB) * Combined, 2),\n    AvgDailyIngestionGB = round(avg(EligibleGB), 3),\n    DaysBenefitActive = countif(DefGB > 0),\n    DaysBenefitInactive = countif(DefGB == 0)",
+        "size": 3,
+        "title": "Period Summary",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "tileSettings": {
+          "titleContent": {
+            "formatter": 1
+          },
+          "leftContent": {
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            }
+          },
+          "showBorder": true
+        }
+      },
+      "name": "period-summary-tiles"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## \ud83d\udcc5 Daily Benefit & Cost Tracking\n\nDay-by-day breakdown showing eligible ingestion, Defender P2 benefit, M365 E5 Sentinel benefit, savings, and billable cost."
+      },
+      "name": "daily-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let LARate = todouble('{LAEffectiveRate}');\nlet SentinelRate = todouble('{SentinelEffectiveRate}');\nlet Combined = todouble('{CombinedRate}');\nlet EligibleTables = dynamic([\"SecurityEvent\",\"WindowsFirewall\",\"SecurityAlert\",\"SecurityBaseline\",\"SecurityBaselineSummary\",\"SecurityDetection\",\"ProtectionStatus\",\"Update\",\"UpdateSummary\",\"MDCFileIntegrityMonitoringEvents\",\"LinuxAuditLog\"]);\nlet PerTableDaily = Usage\n| where TimeGenerated {TimeRange}\n| where IsBillable == true\n| where DataType in (EligibleTables)\n| summarize DailyMB = sum(Quantity) by Day = startofday(TimeGenerated), DataType\n| extend DailyGB = round(DailyMB / 1000.0, 3);\nlet DailyEligible = PerTableDaily\n| summarize EligibleIngestionGB = round(sum(DailyGB), 3), TableBreakdown = make_bag(bag_pack(tostring(DataType), DailyGB)) by Day;\nlet DefBenefit = Operation\n| where TimeGenerated {TimeRange}\n| where Detail startswith \"Benefit amount used\"\n| parse Detail with \"Benefit amount used: \" val \" GB\"\n| extend BenefitGB = toreal(val)\n| parse OperationKey with \"Benefit type used: \" BType\n| where BType contains \"MicrosoftDefender\" or BType contains \"Node\" or BType contains \"Standard\" or BType contains \"Defender\"\n| summarize DefenderBenefitGB = round(sum(BenefitGB), 3) by Day = startofday(TimeGenerated);\nlet SenBenefit = Operation\n| where TimeGenerated {TimeRange}\n| where Detail startswith \"Benefit amount used\"\n| parse Detail with \"Benefit amount used: \" val \" GB\"\n| extend BenefitGB = toreal(val)\n| parse OperationKey with \"Benefit type used: \" BType\n| where BType contains \"Sentinel\" or BType contains \"M365\"\n| summarize SentinelM365BenefitGB = round(sum(BenefitGB), 3) by Day = startofday(TimeGenerated);\nDailyEligible\n| join kind=leftouter DefBenefit on Day\n| join kind=leftouter SenBenefit on Day\n| extend DefenderBenefitGB = coalesce(DefenderBenefitGB, 0.0), SentinelM365BenefitGB = coalesce(SentinelM365BenefitGB, 0.0)\n| extend\n    BenefitActive = iff(DefenderBenefitGB > 0, \"\u2705 Yes\", \"\u274c No\"),\n    DefenderSavings = round(DefenderBenefitGB * LARate, 2),\n    SentinelM365Savings = round(SentinelM365BenefitGB * SentinelRate, 2),\n    TotalDailySavings = round((DefenderBenefitGB * LARate) + (SentinelM365BenefitGB * SentinelRate), 2),\n    BillableGB = round(max_of(0.0, EligibleIngestionGB - DefenderBenefitGB), 3),\n    BillableLACost = round(max_of(0.0, EligibleIngestionGB - DefenderBenefitGB) * LARate, 2),\n    CostWithoutAnyBenefit = round(EligibleIngestionGB * Combined, 2)\n| project Day, EligibleIngestionGB, BenefitActive, DefenderBenefitGB, DefenderSavings, SentinelM365BenefitGB, SentinelM365Savings, TotalDailySavings, BillableGB, BillableLACost, CostWithoutAnyBenefit, TableBreakdown\n| sort by Day desc",
+        "size": 0,
+        "title": "Daily Benefit & Cost Detail",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "BenefitActive",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "contains",
+                    "thresholdValue": "Yes",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "contains",
+                    "thresholdValue": "No",
+                    "representation": "critical",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "representation": "unknown",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            },
+            {
+              "columnMatch": "DefenderSavings",
+              "formatter": 0,
+              "numberFormat": {
+                "unit": 0,
+                "options": {
+                  "style": "currency",
+                  "currency": "USD"
+                }
+              }
+            },
+            {
+              "columnMatch": "SentinelM365Savings",
+              "formatter": 0,
+              "numberFormat": {
+                "unit": 0,
+                "options": {
+                  "style": "currency",
+                  "currency": "USD"
+                }
+              }
+            },
+            {
+              "columnMatch": "TotalDailySavings",
+              "formatter": 0,
+              "numberFormat": {
+                "unit": 0,
+                "options": {
+                  "style": "currency",
+                  "currency": "USD"
+                }
+              }
+            },
+            {
+              "columnMatch": "BillableLACost",
+              "formatter": 0,
+              "numberFormat": {
+                "unit": 0,
+                "options": {
+                  "style": "currency",
+                  "currency": "USD"
+                }
+              }
+            },
+            {
+              "columnMatch": "CostWithoutAnyBenefit",
+              "formatter": 0,
+              "numberFormat": {
+                "unit": 0,
+                "options": {
+                  "style": "currency",
+                  "currency": "USD"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "name": "daily-detail-grid"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## \ud83d\udcc9 Savings Trend\n\nVisual trend showing daily Defender savings, M365 Sentinel savings, and billable cost over time."
+      },
+      "name": "chart-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let LARate = todouble('{LAEffectiveRate}');\nlet SentinelRate = todouble('{SentinelEffectiveRate}');\nlet EligibleTables = dynamic([\"SecurityEvent\",\"WindowsFirewall\",\"SecurityAlert\",\"SecurityBaseline\",\"SecurityBaselineSummary\",\"SecurityDetection\",\"ProtectionStatus\",\"Update\",\"UpdateSummary\",\"MDCFileIntegrityMonitoringEvents\",\"LinuxAuditLog\"]);\nlet PerTableDaily = Usage\n| where TimeGenerated {TimeRange}\n| where IsBillable == true\n| where DataType in (EligibleTables)\n| summarize DailyMB = sum(Quantity) by Day = startofday(TimeGenerated)\n| extend EligibleGB = round(DailyMB / 1000.0, 3);\nlet DefBenefit = Operation\n| where TimeGenerated {TimeRange}\n| where Detail startswith \"Benefit amount used\"\n| parse Detail with \"Benefit amount used: \" val \" GB\"\n| extend BenefitGB = toreal(val)\n| parse OperationKey with \"Benefit type used: \" BType\n| where BType contains \"MicrosoftDefender\" or BType contains \"Node\" or BType contains \"Standard\" or BType contains \"Defender\"\n| summarize DefGB = round(sum(BenefitGB), 3) by Day = startofday(TimeGenerated);\nlet SenBenefit = Operation\n| where TimeGenerated {TimeRange}\n| where Detail startswith \"Benefit amount used\"\n| parse Detail with \"Benefit amount used: \" val \" GB\"\n| extend BenefitGB = toreal(val)\n| parse OperationKey with \"Benefit type used: \" BType\n| where BType contains \"Sentinel\" or BType contains \"M365\"\n| summarize SenGB = round(sum(BenefitGB), 3) by Day = startofday(TimeGenerated);\nPerTableDaily\n| join kind=leftouter DefBenefit on Day\n| join kind=leftouter SenBenefit on Day\n| extend DefGB = coalesce(DefGB, 0.0), SenGB = coalesce(SenGB, 0.0)\n| extend\n    DefenderSavings = round(DefGB * LARate, 2),\n    SentinelM365Savings = round(SenGB * SentinelRate, 2),\n    BillableLACost = round(max_of(0.0, EligibleGB - DefGB) * LARate, 2)\n| project Day, DefenderSavings, SentinelM365Savings, BillableLACost\n| sort by Day asc",
+        "size": 0,
+        "title": "Daily Savings & Billable Cost Trend",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart",
+        "chartSettings": {
+          "seriesLabelSettings": [
+            {
+              "seriesName": "DefenderSavings",
+              "label": "Defender P2 Savings ($)",
+              "color": "green"
+            },
+            {
+              "seriesName": "SentinelM365Savings",
+              "label": "M365 E5 Savings ($)",
+              "color": "blue"
+            },
+            {
+              "seriesName": "BillableLACost",
+              "label": "Billable LA Cost ($)",
+              "color": "redBright"
+            }
+          ],
+          "ySettings": {
+            "numberFormatSettings": {
+              "unit": 0,
+              "options": {
+                "style": "currency",
+                "currency": "USD"
+              }
+            }
+          }
+        }
+      },
+      "name": "savings-trend-chart"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## \ud83d\uddc2\ufe0f Ingestion by Table\n\nBreakdown of eligible ingestion by data type, showing which tables drive the most volume."
+      },
+      "name": "table-breakdown-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let EligibleTables = dynamic([\"SecurityEvent\",\"WindowsFirewall\",\"SecurityAlert\",\"SecurityBaseline\",\"SecurityBaselineSummary\",\"SecurityDetection\",\"ProtectionStatus\",\"Update\",\"UpdateSummary\",\"MDCFileIntegrityMonitoringEvents\",\"LinuxAuditLog\"]);\nUsage\n| where TimeGenerated {TimeRange}\n| where IsBillable == true\n| where DataType in (EligibleTables)\n| summarize TotalGB = round(sum(Quantity) / 1000.0, 3) by DataType\n| sort by TotalGB desc",
+        "size": 0,
+        "title": "Total Eligible Ingestion by Table (Period)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "name": "table-breakdown-pie"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let EligibleTables = dynamic([\"SecurityEvent\",\"WindowsFirewall\",\"SecurityAlert\",\"SecurityBaseline\",\"SecurityBaselineSummary\",\"SecurityDetection\",\"ProtectionStatus\",\"Update\",\"UpdateSummary\",\"MDCFileIntegrityMonitoringEvents\",\"LinuxAuditLog\"]);\nUsage\n| where TimeGenerated {TimeRange}\n| where IsBillable == true\n| where DataType in (EligibleTables)\n| summarize DailyGB = round(sum(Quantity) / 1000.0, 3) by Day = startofday(TimeGenerated), DataType\n| sort by Day asc, DataType asc",
+        "size": 0,
+        "title": "Daily Ingestion by Table (Trend)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart",
+        "chartSettings": {
+          "group": "DataType",
+          "createOtherGroup": 5
+        }
+      },
+      "name": "table-breakdown-trend"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## \ud83d\udd0d Benefit Type Discovery\n\nShows all benefit types present in the Operation table. Use this to verify which benefits are active in your environment."
+      },
+      "name": "discovery-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Operation\n| where TimeGenerated {TimeRange}\n| where Detail startswith \"Benefit amount used\"\n| parse Detail with \"Benefit amount used: \" val \" GB\"\n| extend BenefitGB = toreal(val)\n| parse OperationKey with \"Benefit type used: \" BenefitType\n| summarize\n    DaysActive = dcount(startofday(TimeGenerated)),\n    TotalBenefitGB = round(sum(BenefitGB), 2),\n    AvgDailyBenefitGB = round(avg(BenefitGB), 3)\n    by BenefitType\n| sort by TotalBenefitGB desc",
+        "size": 0,
+        "title": "Benefit Types Detected",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "benefit-discovery"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n*Workbook: Defender for Servers P2 \u2014 Benefit & Cost Analysis | Author: Venicia Solomons*"
+      },
+      "name": "footer"
+    }
+  ],
+  "styleSettings": {},
+  "fromTemplateId": "sentinel-DefenderForServersP2CostAnalysis",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
