@@ -223,7 +223,7 @@
                     "showBorder": true
                 },
                 "crossComponentResources": [
-                    "/subscriptions/d7505cac-f0a2-4896-8c19-818421939a96/resourceGroups/sentinel-goodies/providers/Microsoft.OperationalInsights/workspaces/law-uksouth"
+                    "/subscriptions/<subscription-id>/resourceGroups/sentinel-goodies/providers/Microsoft.OperationalInsights/workspaces/law-uksouth"
                 ]
             },
             "name": "period-summary-tiles",
@@ -332,7 +332,7 @@
                     ]
                 },
                 "crossComponentResources": [
-                    "/subscriptions/d7505cac-f0a2-4896-8c19-818421939a96/resourceGroups/sentinel-goodies/providers/Microsoft.OperationalInsights/workspaces/law-uksouth"
+                    "/subscriptions/<subscription-id>/resourceGroups/sentinel-goodies/providers/Microsoft.OperationalInsights/workspaces/law-uksouth"
                 ]
             },
             "name": "daily-detail-grid",
@@ -385,7 +385,7 @@
                     }
                 },
                 "crossComponentResources": [
-                    "/subscriptions/d7505cac-f0a2-4896-8c19-818421939a96/resourceGroups/sentinel-goodies/providers/Microsoft.OperationalInsights/workspaces/law-uksouth"
+                    "/subscriptions/<subscription-id>/resourceGroups/sentinel-goodies/providers/Microsoft.OperationalInsights/workspaces/law-uksouth"
                 ]
             },
             "name": "savings-trend-chart",
@@ -410,7 +410,7 @@
                 "resourceType": "microsoft.operationalinsights/workspaces",
                 "visualization": "piechart",
                 "crossComponentResources": [
-                    "/subscriptions/d7505cac-f0a2-4896-8c19-818421939a96/resourceGroups/sentinel-goodies/providers/Microsoft.OperationalInsights/workspaces/law-uksouth"
+                    "/subscriptions/<subscription-id>/resourceGroups/sentinel-goodies/providers/Microsoft.OperationalInsights/workspaces/law-uksouth"
                 ]
             },
             "name": "table-breakdown-pie",
@@ -431,7 +431,7 @@
                     "createOtherGroup": 5
                 },
                 "crossComponentResources": [
-                    "/subscriptions/d7505cac-f0a2-4896-8c19-818421939a96/resourceGroups/sentinel-goodies/providers/Microsoft.OperationalInsights/workspaces/law-uksouth"
+                    "/subscriptions/<subscription-id>/resourceGroups/sentinel-goodies/providers/Microsoft.OperationalInsights/workspaces/law-uksouth"
                 ]
             },
             "name": "table-breakdown-trend",
@@ -455,7 +455,7 @@
                 "queryType": 0,
                 "resourceType": "microsoft.operationalinsights/workspaces",
                 "crossComponentResources": [
-                    "/subscriptions/d7505cac-f0a2-4896-8c19-818421939a96/resourceGroups/sentinel-goodies/providers/Microsoft.OperationalInsights/workspaces/law-uksouth"
+                    "/subscriptions/<subscription-id>/resourceGroups/sentinel-goodies/providers/Microsoft.OperationalInsights/workspaces/law-uksouth"
                 ]
             },
             "name": "benefit-discovery",
@@ -474,9 +474,9 @@
     "fromTemplateId": "sentinel-DefenderForServersP2CostAnalysis",
     "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
     "context": {
-        "ownerId": "/subscriptions/d7505cac-f0a2-4896-8c19-818421939a96/resourceGroups/sentinel-goodies/providers/Microsoft.OperationalInsights/workspaces/law-uksouth"
+        "ownerId": "/subscriptions/<subscription-id>/resourceGroups/sentinel-goodies/providers/Microsoft.OperationalInsights/workspaces/law-uksouth"
     },
     "fallbackResourceIds": [
-        "/subscriptions/d7505cac-f0a2-4896-8c19-818421939a96/resourcegroups/sentinel-goodies/providers/microsoft.operationalinsights/workspaces/law-uksouth"
+        "/subscriptions/<subscription-id>/resourcegroups/sentinel-goodies/providers/microsoft.operationalinsights/workspaces/law-uksouth"
     ]
 }
