@@ -10,11 +10,27 @@
 
 This guide clarifies **Microsoft's platform responsibilities vs. customer responsibilities** for data durability in Microsoft Sentinel deployments. 
 
-**Key Finding:** Data loss is preventable, but you must choose the right redundancy configuration.
+**Key Finding:** Data loss is preventable, but **YOU must actively choose the right redundancy level at deployment.**
 
 - ✅ **No Sentinel data is lost** if you configure **ZRS** or **GZRS**
-- ❌ **All data is lost** in single datacenter failure if you use **LRS** (not recommended for production)
+- ❌ **All data is lost** in single datacenter failure if workspace defaults to **LRS** (this is the default)
 - 📋 **Microsoft handles** replication; **you choose** the redundancy level
+- ⚠️ **New deployments default to LRS** — you must explicitly upgrade to ZRS/GZRS
+
+---
+
+## Critical: Default Deployment Behavior
+
+**When you create a new Log Analytics workspace (which backs Sentinel):**
+
+| Step | Who Decides? | Default | Your Action |
+|---|---|---|---|
+| **Workspace creation** | ✅ You | LRS (locally redundant) | ⚠️ Must override to ZRS/GZRS |
+| **Replication** | ✅ Microsoft | Automatic | — |
+| **Zone failover** | ✅ Microsoft | Automatic <5 min | — |
+| **Region failover** | ✅ You | Manual (if GZRS chosen) | Must initiate when needed |
+
+**Translation:** If you don't actively choose ZRS/GZRS during workspace creation, **you get LRS by default = single datacenter failure = total data loss.**
 
 ---
 
@@ -31,7 +47,113 @@ This guide clarifies **Microsoft's platform responsibilities vs. customer respon
 
 ---
 
-## What Microsoft Guarantees
+## For New Deployments: How to Choose Redundancy During Creation
+
+### **Via Azure Portal**
+
+1. **Azure Portal** → **Create a resource** → **Log Analytics Workspace**
+2. **Basics tab:**
+   - Resource group: [select]
+   - Workspace name: [enter]
+   - Region: [select]
+3. **Pricing tier tab** (scroll down):
+   - Click **"Change pricing tier"**
+   - Select **"Pay-as-you-go"** or **"Per GB"** (standard)
+4. ⚠️ **IMPORTANT - Redundancy option NOT visible in basic flow**
+   - Proceed to **Review + Create**
+   - Click **Create**
+5. **After workspace is created** (workspace cannot select redundancy at creation time in portal):
+   - Go to workspace → **Storage account** → **Redundancy**
+   - Change from LRS → GZRS immediately
+
+### **Via Azure CLI (Recommended — Faster)**
+
+```bash
+# Create workspace with default settings
+az monitor log-analytics workspace create \
+  --resource-group "my-rg" \
+  --workspace-name "my-workspace" \
+  --location "eastus"
+
+# Upgrade to GZRS immediately after
+az storage account update \
+  --name "storagename" \
+  --resource-group "my-rg" \
+  --kind StorageV2 \
+  --sku Standard_GZRS
+```
+
+### **Via Terraform / Bicep (IaC)**
+
+**Bicep example** (recommended for enterprise):
+
+```bicep
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' = {
+  name: workspaceName
+  location: location
+  properties: {
+    sku: {
+      name: 'PerGB2018'
+    }
+    publicNetworkAccessForIngestion: 'Enabled'
+    publicNetworkAccessForQuery: 'Enabled'
+  }
+}
+
+resource storageAccount 'Microsoft.Storage/storageAccounts@2021-09-01' = {
+  name: storageAccountName
+  location: location
+  kind: 'StorageV2'
+  sku: {
+    name: 'Standard_GZRS'  // ← Explicitly set GZRS here
+  }
+}
+```
+
+---
+
+## For Existing Deployments: Audit & Upgrade
+
+### **Step 1: Identify all Sentinel workspaces**
+
+```bash
+az monitor log-analytics workspace list \
+  --query "[].{Name:name, ResourceGroup:resourceGroup, Location:location}" \
+  --output table
+```
+
+### **Step 2: Check current redundancy**
+
+```bash
+az storage account show \
+  --resource-group "rg-name" \
+  --name "storage-account-name" \
+  --query "sku.name" \
+  --output tsv
+```
+
+**Expected output:**
+- `Standard_LRS` → ⚠️ **Upgrade to GZRS**
+- `Standard_ZRS` → ✅ Good (but region-only)
+- `Standard_GZRS` → ✅ **Best**
+
+### **Step 3: Upgrade to GZRS**
+
+```bash
+# Upgrade in-place (5-10 min downtime possible)
+az storage account update \
+  --name "storage-account-name" \
+  --resource-group "rg-name" \
+  --sku Standard_GZRS
+```
+
+**Or via Azure Portal:**
+1. Storage account → **Redundancy**
+2. Click **"Change to Geo-zone-redundant storage"**
+3. Review cost impact
+4. Click **Update**
+
+---
 
 **Reference:** [Azure Storage Data Redundancy](https://learn.microsoft.com/en-us/azure/storage/common/storage-redundancy)
 
@@ -134,39 +256,6 @@ Three critical customer decisions:
 
 ---
 
-## How to Find Your Current Configuration
-
-### Via Azure Portal (Easiest)
-
-1. **Azure Portal** → **Log Analytics Workspace** → **Select your workspace**
-2. **Properties** → Look for **"Redundancy"** field
-3. **Note the value:**
-   - `Locally-redundant` = LRS (⚠️ Risk)
-   - `Zone-redundant` = ZRS (✅ Good)
-   - `Geo-zone-redundant` = GZRS (✅ Best)
-
-### Via Azure CLI
-
-```bash
-az monitor log-analytics workspace show \
-  --resource-group "rg-name" \
-  --workspace-name "workspace-name" \
-  --query "properties.sku.name" \
-  --output tsv
-```
-
-**Expected output:** `PerGB2018` (with redundancy set separately in properties)
-
-### Via PowerShell
-
-```powershell
-Get-AzOperationalInsightsWorkspace `
-  -ResourceGroupName "rg-name" `
-  -Name "workspace-name" | Select-Object Sku, Location
-```
-
----
-
 ## Recovery Objectives (RTO/RPO Explained)
 
 **Reference:** [Geo Priority Replication & RPO](https://learn.microsoft.com/en-us/azure/storage/common/storage-redundancy-priority-replication)
@@ -246,10 +335,11 @@ Get-AzOperationalInsightsWorkspace `
 
 ## Next Steps
 
-### **Immediate**
-- [ ] Audit current redundancy configuration (LRS, ZRS, or GZRS?)
-- [ ] Identify all Sentinel workspaces in your subscription
-- [ ] Document which are production vs. dev/test
+### **Immediate (This Week)**
+- [ ] **CRITICAL:** Audit all existing Sentinel workspaces — are they LRS, ZRS, or GZRS?
+- [ ] For any workspace that is LRS → **UPGRADE TO GZRS IMMEDIATELY** (it's a risk)
+- [ ] For new deployments planned → **Explicitly specify GZRS in IaC/ARM template** (don't use defaults)
+- [ ] Document which workspaces are production vs. dev/test
 
 ### **This Month**
 - [ ] Upgrade production workspaces to GZRS
