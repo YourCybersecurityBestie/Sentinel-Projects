@@ -7,7 +7,7 @@ This guide shows how to use Defender for Cloud CLI from GitHub Enterprise Cloud 
 For some GHEC data residency environments, the standard Defender for Cloud GitHub connector path is constrained. This runbook uses a connectorless ingestion pattern:
 
 - Pipeline scan in GitHub Actions
-- Token-based auth to Defender for Cloud DevOps ingestion
+- Token-based auth to Defender for Cloud CI/CD integration
 - Findings uploaded to Defender for Cloud
 - Optional code-to-runtime enrichment using image provenance metadata
 
@@ -27,16 +27,16 @@ For some GHEC data residency environments, the standard Defender for Cloud GitHu
 1. Azure subscription onboarded to Defender for Cloud.
 2. Defender CSPM enabled (recommended).
 3. Container workload path in scope (for example ACR plus AKS) if you want runtime correlation.
-4. Security Admin role to create DevOps Ingestion credentials.
+4. Security Admin role to create CI/CD integration credentials.
 5. GitHub Actions workflow building or referencing container images.
 
-## Step 1: Create Defender DevOps Ingestion credentials
+## Step 1: Create Defender CI/CD integration credentials
 
 In Azure portal:
 
 1. Open **Microsoft Defender for Cloud**.
 2. Go to **Management -> Environment settings -> Integrations**.
-3. Select **Add integration -> DevOps Ingestion (Preview)**.
+3. Select **Add CI/CD (Preview) integration**.
 4. Enter an app name.
 5. Choose tenant, expiration, and enable token.
 6. Save.
@@ -260,8 +260,3 @@ Provenance references:
 - OCI annotations spec:
   - https://github.com/opencontainers/image-spec/blob/main/annotations.md
 
-## Suggested email link text
-
-Use this text in customer communications:
-
-"Step-by-step implementation guide: Defender for Cloud CLI with GHEC data residency"
